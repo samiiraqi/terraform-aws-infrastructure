@@ -976,3 +976,173 @@ module "asg" {
     Environment = var.environment
   }
 }
+
+# =========================================
+# ACM Certificate (must be in us-east-1 for CloudFront)
+# =========================================
+
+module "certificate" {
+  source = "../../modules/security/acm"
+  
+  providers = {
+    aws = aws.us_east_1
+  }
+  
+  domain_name = var.domain_name
+  
+  subject_alternative_names = [
+    "*.${var.domain_name}"
+  ]
+  
+  validation_method       = "DNS"
+  zone_id                 = var.route53_zone_id != "" ? var.route53_zone_id : null
+  create_route53_records  = var.route53_zone_id != "" ? true : false
+  wait_for_validation     = var.route53_zone_id != "" ? true : false
+  
+  tags = {
+    Name = "${var.project_name}-${var.environment}-cert"
+  }
+}
+
+# =========================================
+# WAF for CloudFront
+# =========================================
+
+module "waf" {
+  source = "../../modules/security/waf"
+  
+  providers = {
+    aws = aws.us_east_1
+  }
+  
+  name  = "${var.project_name}-${var.environment}-waf"
+  scope = "CLOUDFRONT"
+  
+  description = "WAF for CloudFront distribution"
+  
+  default_action = "allow"
+  
+  enable_aws_managed_rules = true
+  enable_rate_limiting     = true
+  rate_limit               = 2000
+  
+  tags = {
+    Name = "${var.project_name}-${var.environment}-waf"
+  }
+}
+
+# =========================================
+# CloudFront Distribution
+# =========================================
+
+module "cloudfront" {
+  source = "../../modules/cdn/cloudfront"
+  
+  comment = "${var.project_name} ${var.environment} CDN"
+  
+  aliases = var.route53_zone_id != "" ? [
+    var.domain_name,
+    "www.${var.domain_name}"
+  ] : []
+  
+  acm_certificate_arn = var.route53_zone_id != "" ? module.certificate.certificate_arn : null
+  
+  origin_domain_name      = module.alb.alb_dns_name
+  origin_id               = "alb-origin"
+  origin_protocol_policy  = "http-only"
+  
+  allowed_methods = [
+    "GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"
+  ]
+  cached_methods = ["GET", "HEAD"]
+  
+  viewer_protocol_policy = "redirect-to-https"
+  compress               = true
+  
+  default_ttl = 3600
+  min_ttl     = 0
+  max_ttl     = 86400
+  
+  forwarded_values_cookies       = "all"
+  forwarded_values_query_string  = true
+  forwarded_values_headers = [
+    "Host",
+    "CloudFront-Forwarded-Proto",
+    "CloudFront-Is-Desktop-Viewer",
+    "CloudFront-Is-Mobile-Viewer"
+  ]
+  
+  price_class = "PriceClass_100"
+  
+  web_acl_id = module.waf.web_acl_id
+  
+  custom_error_responses = [
+    {
+      error_code            = 404
+      response_code         = 200
+      response_page_path    = "/index.html"
+      error_caching_min_ttl = 300
+    }
+  ]
+  
+  tags = {
+    Name = "${var.project_name}-${var.environment}-cloudfront"
+  }
+  
+  depends_on = [module.certificate]
+}
+
+# =========================================
+# Route53 Records
+# =========================================
+
+# Apex domain → CloudFront
+module "apex_record" {
+  source = "../../modules/dns/route53"
+  
+  count = var.route53_zone_id != "" ? 1 : 0
+  
+  zone_id = var.route53_zone_id
+  name    = var.domain_name
+  type    = "A"
+  
+  alias = {
+    name                   = module.cloudfront.distribution_domain_name
+    zone_id                = module.cloudfront.distribution_hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# WWW subdomain → CloudFront
+module "www_record" {
+  source = "../../modules/dns/route53"
+  
+  count = var.route53_zone_id != "" ? 1 : 0
+  
+  zone_id = var.route53_zone_id
+  name    = "www.${var.domain_name}"
+  type    = "A"
+  
+  alias = {
+    name                   = module.cloudfront.distribution_domain_name
+    zone_id                = module.cloudfront.distribution_hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# API subdomain → ALB (direct)
+module "api_record" {
+  source = "../../modules/dns/route53"
+  
+  count = var.route53_zone_id != "" ? 1 : 0
+  
+  zone_id = var.route53_zone_id
+  name    = "api.${var.domain_name}"
+  type    = "A"
+  
+  alias = {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
+}

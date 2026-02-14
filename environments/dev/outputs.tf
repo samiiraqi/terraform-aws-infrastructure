@@ -165,6 +165,61 @@ output "vpc_flow_log_group_name" {
 }
 
 # =========================================
+# CloudFront Outputs
+# =========================================
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID"
+  value       = module.cloudfront.distribution_id
+}
+
+output "cloudfront_domain_name" {
+  description = "CloudFront domain name"
+  value       = module.cloudfront.distribution_domain_name
+}
+
+output "cloudfront_url" {
+  description = "CloudFront URL"
+  value       = var.route53_zone_id != "" ? "https://${var.domain_name}" : "https://${module.cloudfront.distribution_domain_name}"
+}
+
+# =========================================
+# WAF Outputs
+# =========================================
+
+output "waf_web_acl_id" {
+  description = "WAF Web ACL ID"
+  value       = module.waf.web_acl_id
+}
+
+# =========================================
+# Certificate Outputs
+# =========================================
+
+output "certificate_arn" {
+  description = "ACM certificate ARN"
+  value       = var.route53_zone_id != "" ? module.certificate.certificate_arn : "N/A - No Route53 zone configured"
+}
+
+# =========================================
+# Complete URLs
+# =========================================
+
+output "application_urls" {
+  description = "All application URLs"
+  value = var.route53_zone_id != "" ? {
+    primary    = "https://${var.domain_name}"
+    www        = "https://www.${var.domain_name}"
+    api        = "https://api.${var.domain_name}"
+    alb_direct = "http://${module.alb.alb_dns_name}"
+    cloudfront = "https://${module.cloudfront.distribution_domain_name}"
+  } : {
+    alb_direct = "http://${module.alb.alb_dns_name}"
+    cloudfront = "https://${module.cloudfront.distribution_domain_name}"
+  }
+}
+
+# =========================================
 # Summary Output
 # =========================================
 
@@ -176,8 +231,19 @@ output "deployment_summary" {
   ║         🚀 DEV Environment Deployed Successfully! 🚀        ║
   ╚════════════════════════════════════════════════════════════╝
   
-  📍 Application URL:
-     http://${module.alb.alb_dns_name}
+  📍 Application URLs:
+     ${var.route53_zone_id != "" ? "Primary:    https://${var.domain_name}" : "CloudFront: https://${module.cloudfront.distribution_domain_name}"}
+     ${var.route53_zone_id != "" ? "WWW:        https://www.${var.domain_name}" : ""}
+     ${var.route53_zone_id != "" ? "API:        https://api.${var.domain_name}" : ""}
+     ALB Direct: http://${module.alb.alb_dns_name}
+  
+  🌍 CloudFront:
+     Distribution: ${module.cloudfront.distribution_domain_name}
+     ID: ${module.cloudfront.distribution_id}
+  
+  🛡️  Security:
+     WAF Web ACL: ${module.waf.web_acl_id}
+     ${var.route53_zone_id != "" ? "SSL Certificate: Enabled (${module.certificate.certificate_arn})" : "SSL Certificate: CloudFront Default"}
   
   🗄️  Database:
      Host: ${module.rds.db_instance_address}
@@ -187,6 +253,7 @@ output "deployment_summary" {
   
   📊 Auto Scaling:
      Min: ${var.min_size} | Max: ${var.max_size} | Desired: ${var.desired_capacity}
+     ASG: ${module.asg.autoscaling_group_name}
   
   🪣 S3 Buckets:
      Logs: ${module.logs_bucket.bucket_name}
@@ -197,19 +264,26 @@ output "deployment_summary" {
      ALB:  ${module.alb_logs.log_group_name}
      VPC:  ${module.vpc_flow_logs.log_group_name}
   
-  🔒 Security:
-     ✅ All traffic encrypted
+  🔒 Security Features:
+     ✅ WAF Protection (SQL injection, XSS, rate limiting)
+     ✅ All traffic encrypted (HTTPS)
      ✅ Private subnets for app & database
-     ✅ VPC Endpoints (no internet for AWS services)
-     ✅ Secrets in Secrets Manager
+     ✅ VPC Endpoints (S3, Secrets Manager, CloudWatch)
+     ✅ Secrets in AWS Secrets Manager
+     ✅ CloudFront CDN with edge caching
+     ✅ Auto Scaling for high availability
   
   💡 Next Steps:
-     1. Wait 3-5 minutes for instances to be healthy
-     2. Visit the ALB URL above
-     3. Check Auto Scaling Group in AWS Console
-     4. Monitor CloudWatch Logs
+     1. ${var.route53_zone_id != "" ? "Certificate validation (3-5 minutes)" : "No DNS validation needed"}
+     2. CloudFront deployment (10-15 minutes)
+     3. EC2 instances launch (2-3 minutes)
+     4. Health checks pass (2-3 minutes)
+     5. Visit your website!
   
-  🎉 Everything is ready! Enjoy your infrastructure!
+  🎯 Access your application:
+     ${var.route53_zone_id != "" ? "🌐 https://${var.domain_name}" : "🌐 https://${module.cloudfront.distribution_domain_name}"}
+  
+  🎉 Everything is ready! Enjoy your production-grade infrastructure!
   
   EOT
 }
