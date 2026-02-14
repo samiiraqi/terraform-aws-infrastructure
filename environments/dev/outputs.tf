@@ -170,7 +170,7 @@ output "vpc_flow_log_group_name" {
 
 output "deployment_summary" {
   description = "Deployment summary"
-  value = <<-EOT
+  value       = <<-EOT
   
   ╔════════════════════════════════════════════════════════════╗
   ║         🚀 DEV Environment Deployed Successfully! 🚀        ║

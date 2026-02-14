@@ -2,15 +2,17 @@
 # VPC Endpoint
 # =========================================
 
-# Data source to get the service name
-data "aws_vpc_endpoint_service" "this" {
-  service = var.service_name
+# Service name construction
+locals {
+  service_name = var.vpc_endpoint_type == "Gateway" ? "com.amazonaws.${data.aws_region.current.name}.${var.service_name}" : "com.amazonaws.${data.aws_region.current.name}.${var.service_name}"
 }
+
+data "aws_region" "current" {}
 
 # VPC Endpoint
 resource "aws_vpc_endpoint" "this" {
   vpc_id            = var.vpc_id
-  service_name      = data.aws_vpc_endpoint_service.this.service_name
+  service_name      = local.service_name
   vpc_endpoint_type = var.vpc_endpoint_type
   
   # Gateway Endpoint settings

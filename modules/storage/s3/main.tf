@@ -69,7 +69,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
     content {
       id     = rule.value.id
       status = rule.value.enabled ? "Enabled" : "Disabled"
-      
+      filter {}
       dynamic "expiration" {
         for_each = rule.value.expiration_days != null ? [1] : []
         

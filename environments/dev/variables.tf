@@ -49,7 +49,7 @@ variable "instance_type" {
 variable "ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
-  default     = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2
+  default     = "ami-0c55b159cbfafe1f0" # Amazon Linux 2
 }
 
 variable "min_size" {
@@ -117,5 +117,5 @@ variable "domain_name" {
 variable "route53_zone_id" {
   description = "Route53 hosted zone ID"
   type        = string
-  default     = ""  # You'll fill this in
+  default     = "" # You'll fill this in
 }
